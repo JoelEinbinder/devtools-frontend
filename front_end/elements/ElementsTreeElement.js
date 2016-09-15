@@ -1273,8 +1273,6 @@ WebInspector.ElementsTreeElement.prototype = {
                 return span;
             }
             value = value.replace(closingPunctuationRegex, "$&\u200B");
-            if (value.startsWith("data:"))
-                value = value.trimMiddle(60);
             var anchor = WebInspector.linkifyURLAsNode(rewrittenHref, value, "", node.nodeName().toLowerCase() === "a");
             anchor.preventFollow = true;
             return anchor;

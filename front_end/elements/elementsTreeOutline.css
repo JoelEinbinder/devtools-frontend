@@ -244,6 +244,8 @@ button, input, select {
 
 .webkit-html-attribute-value a {
     cursor: default !important;
+    display: inline-flex;
+    white-space: nowrap;
 }
 
 .elements-tree-nowrap, .elements-tree-nowrap .li {

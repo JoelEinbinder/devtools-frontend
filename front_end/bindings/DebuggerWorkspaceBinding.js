@@ -532,6 +532,11 @@ WebInspector.DebuggerWorkspaceBinding.ScriptInfo.prototype = {
             uiLocation = this._sourceMappings[i].rawLocationToUILocation(rawLocation);
         console.assert(uiLocation, "Script raw location cannot be mapped to any UI location.");
         return /** @type {!WebInspector.UILocation} */ (uiLocation);
+    },
+
+    _rawLocationWithOffset: function(rawLocation, offset)
+    {
+        return rawLocation;
     }
 }
 

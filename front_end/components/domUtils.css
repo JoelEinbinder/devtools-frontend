@@ -28,6 +28,10 @@
     line-height: 16px;
 }
 
+.stack-preview-container > tr .webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    margin-top: 12px;
+}
+
 .stack-preview-container td {
     white-space: nowrap;
     overflow: hidden;

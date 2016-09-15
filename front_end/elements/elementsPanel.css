@@ -272,9 +272,8 @@
     display: inline-block;
 }
 
-.styles-section a[data-uncopyable]::before {
+.styles-section [data-uncopyable] [is=dt-inner-truncating-text]::before {
     content: attr(data-uncopyable);
-    text-decoration: underline;
 }
 
 .styles-section .style-properties {

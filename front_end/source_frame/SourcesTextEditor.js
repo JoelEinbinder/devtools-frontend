@@ -16,7 +16,6 @@ WebInspector.SourcesTextEditor = function(delegate)
     });
 
     this.codeMirror().addKeyMap({
-        "Enter": "smartNewlineAndIndent",
         "Esc": "sourcesDismiss"
     });
 
@@ -31,7 +30,6 @@ WebInspector.SourcesTextEditor = function(delegate)
     this.codeMirror().on("beforeSelectionChange", this._beforeSelectionChangeForDelegate.bind(this));
     this.element.addEventListener("contextmenu", this._contextMenu.bind(this), false);
 
-    this._blockIndentController = new WebInspector.SourcesTextEditor.BlockIndentController(this.codeMirror());
     this._tokenHighlighter = new WebInspector.SourcesTextEditor.TokenHighlighter(this, this.codeMirror());
 
     /** @type {!Array<string>} */
@@ -174,7 +172,7 @@ WebInspector.SourcesTextEditor.prototype = {
             this._gutters.push(type);
 
         this.codeMirror().setOption("gutters", this._gutters.slice());
-        this.refresh();
+        this.codeMirror().refresh();
     },
 
     /**
@@ -182,12 +180,9 @@ WebInspector.SourcesTextEditor.prototype = {
      */
     uninstallGutter: function(type)
     {
-        var index = this._gutters.indexOf(type);
-        if (index === -1)
-            return;
-        this._gutters.splice(index,1);
+        this._gutters = this._gutters.filter(gutter => gutter !== type);
         this.codeMirror().setOption("gutters", this._gutters.slice());
-        this.refresh();
+        this.codeMirror().refresh();
     },
 
     /**
@@ -348,32 +343,12 @@ WebInspector.SourcesTextEditor.prototype = {
     },
 
     /**
+     * @override
      * @return {string}
      */
     indent: function()
     {
         return this._indentationLevel;
-    },
-
-    _onAutoAppendedSpaces: function()
-    {
-        this._autoAppendedSpaces = this._autoAppendedSpaces || [];
-
-        for (var i = 0; i < this._autoAppendedSpaces.length; ++i) {
-            var position = this._autoAppendedSpaces[i].resolve();
-            if (!position)
-                continue;
-            var line = this.line(position.lineNumber);
-            if (line.length === position.columnNumber && WebInspector.TextUtils.lineIndent(line).length === line.length)
-                this.codeMirror().replaceRange("", new CodeMirror.Pos(position.lineNumber, 0), new CodeMirror.Pos(position.lineNumber, position.columnNumber));
-        }
-
-        this._autoAppendedSpaces = [];
-        var selections = this.selections();
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            this._autoAppendedSpaces.push(this.textEditorPositionHandle(selection.startLine, selection.startColumn));
-        }
     },
 
     /**
@@ -661,28 +636,6 @@ WebInspector.SourcesTextEditorDelegate.prototype = {
 }
 
 /**
- * @param {!CodeMirror} codeMirror
- */
-CodeMirror.commands.smartNewlineAndIndent = function(codeMirror)
-{
-    codeMirror.operation(innerSmartNewlineAndIndent.bind(null, codeMirror));
-    function innerSmartNewlineAndIndent(codeMirror)
-    {
-        var selections = codeMirror.listSelections();
-        var replacements = [];
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            var cur = CodeMirror.cmpPos(selection.head, selection.anchor) < 0 ? selection.head : selection.anchor;
-            var line = codeMirror.getLine(cur.line);
-            var indent = WebInspector.TextUtils.lineIndent(line);
-            replacements.push("\n" + indent.substring(0, Math.min(cur.ch, indent.length)));
-        }
-        codeMirror.replaceSelections(replacements);
-        codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
-    }
-}
-
-/**
  * @return {!Object|undefined}
  */
 CodeMirror.commands.sourcesDismiss = function(codemirror)
@@ -690,104 +643,6 @@ CodeMirror.commands.sourcesDismiss = function(codemirror)
     if (codemirror.listSelections().length === 1 && codemirror._codeMirrorTextEditor._isSearchActive())
         return CodeMirror.Pass;
     return CodeMirror.commands.dismiss(codemirror);
-}
-
-/**
- * @constructor
- * @param {!CodeMirror} codeMirror
- */
-WebInspector.SourcesTextEditor.BlockIndentController = function(codeMirror)
-{
-    codeMirror.addKeyMap(this);
-}
-
-WebInspector.SourcesTextEditor.BlockIndentController.prototype = {
-    name: "blockIndentKeymap",
-
-    /**
-     * @return {*}
-     */
-    Enter: function(codeMirror)
-    {
-        var selections = codeMirror.listSelections();
-        var replacements = [];
-        var allSelectionsAreCollapsedBlocks = false;
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            var start = CodeMirror.cmpPos(selection.head, selection.anchor) < 0 ? selection.head : selection.anchor;
-            var line = codeMirror.getLine(start.line);
-            var indent = WebInspector.TextUtils.lineIndent(line);
-            var indentToInsert = "\n" + indent + codeMirror._codeMirrorTextEditor.indent();
-            var isCollapsedBlock = false;
-            if (selection.head.ch === 0)
-                return CodeMirror.Pass;
-            if (line.substr(selection.head.ch - 1, 2) === "{}") {
-                indentToInsert += "\n" + indent;
-                isCollapsedBlock = true;
-            } else if (line.substr(selection.head.ch - 1, 1) !== "{") {
-                return CodeMirror.Pass;
-            }
-            if (i > 0 && allSelectionsAreCollapsedBlocks !== isCollapsedBlock)
-                return CodeMirror.Pass;
-            replacements.push(indentToInsert);
-            allSelectionsAreCollapsedBlocks = isCollapsedBlock;
-        }
-        codeMirror.replaceSelections(replacements);
-        if (!allSelectionsAreCollapsedBlocks) {
-            codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
-            return;
-        }
-        selections = codeMirror.listSelections();
-        var updatedSelections = [];
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            var line = codeMirror.getLine(selection.head.line - 1);
-            var position = new CodeMirror.Pos(selection.head.line - 1, line.length);
-            updatedSelections.push({
-                head: position,
-                anchor: position
-            });
-        }
-        codeMirror.setSelections(updatedSelections);
-        codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
-    },
-
-    /**
-     * @return {*}
-     */
-    "'}'": function(codeMirror)
-    {
-        if (codeMirror.somethingSelected())
-            return CodeMirror.Pass;
-        var selections = codeMirror.listSelections();
-        var replacements = [];
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            var line = codeMirror.getLine(selection.head.line);
-            if (line !== WebInspector.TextUtils.lineIndent(line))
-                return CodeMirror.Pass;
-            replacements.push("}");
-        }
-        codeMirror.replaceSelections(replacements);
-        selections = codeMirror.listSelections();
-        replacements = [];
-        var updatedSelections = [];
-        for (var i = 0; i < selections.length; ++i) {
-            var selection = selections[i];
-            var matchingBracket = codeMirror.findMatchingBracket(selection.head);
-            if (!matchingBracket || !matchingBracket.match)
-                return;
-            updatedSelections.push({
-                head: selection.head,
-                anchor: new CodeMirror.Pos(selection.head.line, 0)
-            });
-            var line = codeMirror.getLine(matchingBracket.to.line);
-            var indent = WebInspector.TextUtils.lineIndent(line);
-            replacements.push(indent + "}");
-        }
-        codeMirror.setSelections(updatedSelections);
-        codeMirror.replaceSelections(replacements);
-    }
 }
 
 /**

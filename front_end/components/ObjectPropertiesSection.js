@@ -1206,7 +1206,7 @@ WebInspector.ObjectPropertiesSection.formatObjectAsFunction = function(func, ele
             return;
         }
 
-        if (linkify && response && response.location) {
+        if (linkify && response.location) {
             var anchor = createElement("span");
             element.classList.add("linkified");
             element.appendChild(anchor);
@@ -1214,9 +1214,51 @@ WebInspector.ObjectPropertiesSection.formatObjectAsFunction = function(func, ele
             element = anchor;
         }
 
-        var text = func.description.substring(0, 200);
+        var maxPreviewLength = 200;
+        var description = func.description.replace(/^function /, "");
+
+        // Try to get body details from formatted source first
+        if (includePreview && response.location) {
+            var offset = Math.min(200, description.length);
+            var startRawLocation = response.location;
+
+            var scriptId = response.location.scriptId;
+            var script = func.debuggerModel().scripts[scriptId];
+
+            var target = startRawLocation.target();
+            var debuggerModel = WebInspector.DebuggerModel.fromTarget(target);
+
+            var info = WebInspector.debuggerWorkspaceBinding._infoForScript(startRawLocation.target(), startRawLocation.scriptId);
+            var uiSourceCode = info._sourceMappings[0]._uiSourceCodeForScriptId.get(scriptId)
+            var targetData = WebInspector.debuggerWorkspaceBinding._targetToData.get(startRawLocation.target())
+            uiSourceCode.requestContent().then(function(content) {
+                var lineEndings = content.computeLineEndings();
+                var startPosition = WebInspector.Formatter.locationToPosition(lineEndings, startRawLocation.lineNumber, startRawLocation.columnNumber);
+                var endLocation = WebInspector.Formatter.positionToLocation(lineEndings, startPosition + offset);
+                var endRawLocation = debuggerModel.createRawLocation(script, endLocation[0], endLocation[1]);
+
+                var startUILocation = WebInspector.debuggerWorkspaceBinding.rawLocationToUILocation(startRawLocation);
+                var endUILocation = WebInspector.debuggerWorkspaceBinding.rawLocationToUILocation(endRawLocation);
+
+                var formattedUiSourceCode = startUILocation.uiSourceCode;
+                var formattedContent = formattedUiSourceCode.requestContent().then(function(formattedContent) {
+                    var formattedLineEndings = formattedContent.computeLineEndings();
+                    var startUIPosition = WebInspector.Formatter.locationToPosition(formattedLineEndings, startUILocation.lineNumber, startUILocation.columnNumber);
+                    var endUIPosition = WebInspector.Formatter.locationToPosition(formattedLineEndings, endUILocation.lineNumber, endUILocation.columnNumber);
+                    var text = formattedContent.slice(startUIPosition, endUIPosition);
+
+                    if (includePreview) {
+                        text = text.length > maxPreviewLength ? text.substring(0, maxPreviewLength) + "\u2026" : text;
+                        element.textContent = text;
+                    }
+                });
+            })
+        }
+
         if (includePreview) {
-            element.textContent = text.replace(/^function /, "") + (func.description.length > 200 ? "\u2026" : "");
+            var text = description;
+            text = text.length > maxPreviewLength ? text.substring(0, maxPreviewLength) + "\u2026" : text;
+            element.textContent = text;
             return;
         }
 
@@ -1224,7 +1266,7 @@ WebInspector.ObjectPropertiesSection.formatObjectAsFunction = function(func, ele
         self.runtime.extension(WebInspector.TokenizerFactory).instance().then(processTokens);
 
         var params = null;
-        var functionName = response ? response.functionName : "";
+        var functionName = response.functionName;
 
         /**
          * @param {!WebInspector.TokenizerFactory} tokenizerFactory

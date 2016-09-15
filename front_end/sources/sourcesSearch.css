@@ -209,8 +209,11 @@
 }
 
 #search-results-pane-file-based a {
-    text-decoration: none;
     display: block;
+}
+
+#search-results-pane-file-based [is=dt-inner-truncating-text]::before {
+    width: 0;
 }
 
 #search-results-pane-file-based .search-match .search-match-content {

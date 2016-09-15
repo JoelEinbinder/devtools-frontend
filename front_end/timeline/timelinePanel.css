@@ -369,6 +369,10 @@
     line-height: 20px;
 }
 
+.timeline-details-view-row .webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    margin-top: 15px;
+}
+
 .timeline-details-view-block .timeline-details-stack-values {
     flex-direction: column !important;
 }
@@ -392,6 +396,7 @@
 .timeline-details-view-row-title {
     color: rgb(152, 152, 152);
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .timeline-details-warning {

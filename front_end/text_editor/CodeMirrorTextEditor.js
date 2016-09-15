@@ -47,10 +47,11 @@ WebInspector.CodeMirrorTextEditor = function(options)
     this._codeMirror = new window.CodeMirror(this.element, {
         lineNumbers: options.lineNumbers,
         matchBrackets: true,
-        smartIndent: false,
+        smartIndent: true,
         styleSelectedText: true,
         electricChars: false,
         styleActiveLine: true,
+        indentUnit: 4,
         lineWrapping: options.lineWrapping
     });
     this._codeMirrorElement = this.element.lastElementChild;
@@ -70,7 +71,7 @@ WebInspector.CodeMirrorTextEditor = function(options)
         "Backspace": "delCharBefore",
         "Tab": "defaultTab",
         "Shift-Tab": "indentLess",
-        "Enter": "newlineAndIndent",
+        "Enter": "smartNewlineAndIndent",
         "Ctrl-Space": "autocomplete",
         "Esc": "dismiss",
         "Ctrl-M": "gotoMatchingBracket"
@@ -148,6 +149,8 @@ WebInspector.CodeMirrorTextEditor = function(options)
     this._codeMirror.on("beforeSelectionChange", this._beforeSelectionChange.bind(this));
     this._codeMirror.on("keyHandled", this._onKeyHandled.bind(this));
 
+    this._blockIndentController = new WebInspector.CodeMirrorTextEditor.BlockIndentController(this.codeMirror());
+
     this.element.style.overflow = "hidden";
     this._codeMirrorElement.classList.add("source-code");
     this._codeMirrorElement.classList.add("fill");
@@ -160,11 +163,10 @@ WebInspector.CodeMirrorTextEditor = function(options)
     this.element.addEventListener("keydown", this._handleKeyDown.bind(this), true);
     this.element.addEventListener("keydown", this._handlePostKeyDown.bind(this), false);
     this.element.tabIndex = 0;
-
-    this._needsRefresh = true;
-
     if (options.mimeType)
         this.setMimeType(options.mimeType);
+    if (options.autoHeight)
+        this._codeMirror.setSize(null, "auto");
 }
 
 WebInspector.CodeMirrorTextEditor.maxHighlightLength = 1000;
@@ -270,6 +272,28 @@ CodeMirror.commands.redoAndReveal = function(codemirror)
     var autocompleteController = codemirror._codeMirrorTextEditor._autocompleteController;
     if (autocompleteController)
         autocompleteController.clearAutocomplete();
+}
+
+/**
+ * @param {!CodeMirror} codeMirror
+ */
+CodeMirror.commands.smartNewlineAndIndent = function(codeMirror)
+{
+    codeMirror.operation(innerSmartNewlineAndIndent.bind(null, codeMirror));
+    function innerSmartNewlineAndIndent(codeMirror)
+    {
+        var selections = codeMirror.listSelections();
+        var replacements = [];
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            var cur = CodeMirror.cmpPos(selection.head, selection.anchor) < 0 ? selection.head : selection.anchor;
+            var line = codeMirror.getLine(cur.line);
+            var indent = WebInspector.TextUtils.lineIndent(line);
+            replacements.push("\n" + indent.substring(0, Math.min(cur.ch, indent.length)));
+        }
+        codeMirror.replaceSelections(replacements);
+        codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
+    }
 }
 
 /**
@@ -530,21 +554,10 @@ WebInspector.CodeMirrorTextEditor.prototype = {
      */
     wasShown: function()
     {
-        if (this._needsRefresh)
-            this.refresh();
-    },
-
-    /**
-     * @protected
-     */
-    refresh: function()
-    {
-        if (this.isShowing()) {
-            this._codeMirror.refresh();
-            this._needsRefresh = false;
+        if (this._wasOnceShown)
             return;
-        }
-        this._needsRefresh = true;
+        this._wasOnceShown = true;
+        this._codeMirror.refresh();
     },
 
     /**
@@ -993,8 +1006,12 @@ WebInspector.CodeMirrorTextEditor.prototype = {
         var scrollTop = this._codeMirror.doc.scrollTop;
         var width = parentElement.offsetWidth;
         var height = parentElement.offsetHeight - this.element.offsetTop;
-        this._codeMirror.setSize(width, height);
-        this._updatePaddingBottom(width, height);
+        if (this._options.autoHeight) {
+            this._codeMirror.setSize(width, "auto");
+        } else {
+            this._codeMirror.setSize(width, height);
+            this._updatePaddingBottom(width, height);
+        }
         this._codeMirror.scrollTo(scrollLeft, scrollTop);
     },
 
@@ -1259,6 +1276,45 @@ WebInspector.CodeMirrorTextEditor.prototype = {
     get linesCount()
     {
         return this._codeMirror.lineCount();
+    },
+
+    /**
+     * @return {string}
+     */
+    indent: function()
+    {
+        return "    ";
+    },
+
+    _onAutoAppendedSpaces: function()
+    {
+        this._autoAppendedSpaces = this._autoAppendedSpaces || [];
+
+        for (var i = 0; i < this._autoAppendedSpaces.length; ++i) {
+            var position = this._autoAppendedSpaces[i].resolve();
+            if (!position)
+                continue;
+            var line = this.line(position.lineNumber);
+            if (line.length === position.columnNumber && WebInspector.TextUtils.lineIndent(line).length === line.length)
+                this.codeMirror().replaceRange("", new CodeMirror.Pos(position.lineNumber, 0), new CodeMirror.Pos(position.lineNumber, position.columnNumber));
+        }
+
+        this._autoAppendedSpaces = [];
+        var selections = this.selections();
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            this._autoAppendedSpaces.push(this.textEditorPositionHandle(selection.startLine, selection.startColumn));
+        }
+    },
+
+
+    /**
+     * @override
+     */
+    newlineAndIndent: function()
+    {
+        if (this._blockIndentController.Enter(this._codeMirror) === CodeMirror.Pass)
+            this._codeMirror.execCommand("smartNewlineAndIndent");
     },
 
     /**
@@ -1542,6 +1598,105 @@ WebInspector.CodeMirrorTextEditor.SelectNextOccurrenceController.prototype = {
         if (typeof matchedLineNumber !== "number")
             return null;
         return new WebInspector.TextRange(matchedLineNumber, matchedColumnNumber, matchedLineNumber, matchedColumnNumber + textToFind.length);
+    }
+}
+
+
+/**
+ * @constructor
+ * @param {!CodeMirror} codeMirror
+ */
+WebInspector.CodeMirrorTextEditor.BlockIndentController = function(codeMirror)
+{
+    codeMirror.addKeyMap(this);
+}
+
+WebInspector.CodeMirrorTextEditor.BlockIndentController.prototype = {
+    name: "blockIndentKeymap",
+
+    /**
+     * @return {*}
+     */
+    Enter: function(codeMirror)
+    {
+        var selections = codeMirror.listSelections();
+        var replacements = [];
+        var allSelectionsAreCollapsedBlocks = false;
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            var start = CodeMirror.cmpPos(selection.head, selection.anchor) < 0 ? selection.head : selection.anchor;
+            var line = codeMirror.getLine(start.line);
+            var indent = WebInspector.TextUtils.lineIndent(line);
+            var indentToInsert = "\n" + indent + codeMirror._codeMirrorTextEditor.indent();
+            var isCollapsedBlock = false;
+            if (selection.head.ch === 0)
+                return CodeMirror.Pass;
+            if (line.substr(selection.head.ch - 1, 2) === "{}") {
+                indentToInsert += "\n" + indent;
+                isCollapsedBlock = true;
+            } else if (line.substr(selection.head.ch - 1, 1) !== "{") {
+                return CodeMirror.Pass;
+            }
+            if (i > 0 && allSelectionsAreCollapsedBlocks !== isCollapsedBlock)
+                return CodeMirror.Pass;
+            replacements.push(indentToInsert);
+            allSelectionsAreCollapsedBlocks = isCollapsedBlock;
+        }
+        codeMirror.replaceSelections(replacements);
+        if (!allSelectionsAreCollapsedBlocks) {
+            codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
+            return;
+        }
+        selections = codeMirror.listSelections();
+        var updatedSelections = [];
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            var line = codeMirror.getLine(selection.head.line - 1);
+            var position = new CodeMirror.Pos(selection.head.line - 1, line.length);
+            updatedSelections.push({
+                head: position,
+                anchor: position
+            });
+        }
+        codeMirror.setSelections(updatedSelections);
+        codeMirror._codeMirrorTextEditor._onAutoAppendedSpaces();
+    },
+
+    /**
+     * @return {*}
+     */
+    "'}'": function(codeMirror)
+    {
+        if (codeMirror.somethingSelected())
+            return CodeMirror.Pass;
+        var selections = codeMirror.listSelections();
+        var replacements = [];
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            var line = codeMirror.getLine(selection.head.line);
+            if (line !== WebInspector.TextUtils.lineIndent(line))
+                return CodeMirror.Pass;
+            replacements.push("}");
+        }
+        codeMirror.replaceSelections(replacements);
+        selections = codeMirror.listSelections();
+        replacements = [];
+        var updatedSelections = [];
+        for (var i = 0; i < selections.length; ++i) {
+            var selection = selections[i];
+            var matchingBracket = codeMirror.findMatchingBracket(selection.head);
+            if (!matchingBracket || !matchingBracket.match)
+                return;
+            updatedSelections.push({
+                head: selection.head,
+                anchor: new CodeMirror.Pos(selection.head.line, 0)
+            });
+            var line = codeMirror.getLine(matchingBracket.to.line);
+            var indent = WebInspector.TextUtils.lineIndent(line);
+            replacements.push(indent + "}");
+        }
+        codeMirror.setSelections(updatedSelections);
+        codeMirror.replaceSelections(replacements);
     }
 }
 

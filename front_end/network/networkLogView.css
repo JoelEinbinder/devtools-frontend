@@ -72,6 +72,10 @@
     vertical-align: middle;
 }
 
+.network-log-grid.data-grid td .webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    margin-top: 13px;
+}
+
 .network-log-grid.data-grid.small td {
     height: 21px;
 }

@@ -346,9 +346,7 @@ WebInspector.Main.prototype = {
     {
         var target = event.target;
         if (target.shadowRoot)
-            target = event.deepElementFromPoint();
-        if (!target)
-            return;
+            target = event.deepElementFromPoint() || event.target;
 
         var anchor = target.enclosingNodeOrSelfWithNodeName("a");
         if (!anchor || !anchor.href)

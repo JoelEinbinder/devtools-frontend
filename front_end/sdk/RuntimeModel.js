@@ -670,39 +670,51 @@ WebInspector.ExecutionContext.prototype = {
 
             /**
              * @param {string=} type
-             * @return {!Object}
+             * @return {!Array<!Array<string>>}
              * @suppressReceiverCheck
              * @this {Object}
              */
             function getCompletions(type)
             {
                 var object;
-                if (type === "string")
+                if (type === "string") {
                     object = new String("");
-                else if (type === "number")
+                }
+                else if (type === "number") {
                     object = new Number(0);
-                else if (type === "boolean")
+                }
+                else if (type === "boolean") {
                     object = new Boolean(false);
+                }
                 else
                     object = this;
 
-                var resultSet = { __proto__: null };
+                var resultSet = new Set();
+                var results = [];
                 try {
-                    for (var o = object; o; o = Object.getPrototypeOf(o)) {
+                    for (var o = object, depth = 1; o; o = Object.getPrototypeOf(o), depth++) {
                         if ((type === "array" || type === "typedarray") && o === object && ArrayBuffer.isView(o) && o.length > 9999)
                             continue;
                         var names = Object.getOwnPropertyNames(o);
                         var isArray = Array.isArray(o);
                         for (var i = 0; i < names.length; ++i) {
+                            var name = names[i];
                             // Skip array elements indexes.
-                            if (isArray && /^[0-9]/.test(names[i]))
+                            if (isArray && /^[0-9]/.test(name))
                                 continue;
-                            resultSet[names[i]] = true;
+                            if (resultSet.has(name))
+                                continue;
+                            resultSet.add(name);
+                            var item = { depth: depth, type: typeof (object[name]), value: object[name] + "", name: name };
+                            if (item.type === "object")
+                                item.constructor = object[name] && object[name].constructor && object[name].constructor.name;
+                            results.push([name, item]);
                         }
                     }
                 } catch (e) {
+                    console.warn(e);
                 }
-                return resultSet;
+                return results;
             }
 
             /**
@@ -731,13 +743,13 @@ WebInspector.ExecutionContext.prototype = {
         {
             this.target().runtimeAgent().releaseObjectGroup("completion");
             if (result && !exceptionDetails)
-                receivedPropertyNames.call(this, /** @type {!Object} */(result.value));
+                receivedPropertyNames.call(this, /** @type {!Array<!Array>} */(result.value));
             else
                 completionsReadyCallback([]);
         }
 
         /**
-         * @param {?Object} propertyNames
+         * @param {?Array<!Array>} propertyNames
          * @this {WebInspector.ExecutionContext}
          */
         function receivedPropertyNames(propertyNames)
@@ -747,14 +759,16 @@ WebInspector.ExecutionContext.prototype = {
                 completionsReadyCallback([]);
                 return;
             }
+            var properties = new Map(propertyNames);
             var includeCommandLineAPI = (!dotNotation && !bracketNotation);
             if (includeCommandLineAPI) {
                 const commandLineAPI = ["dir", "dirxml", "keys", "values", "profile", "profileEnd", "monitorEvents", "unmonitorEvents", "inspect", "copy", "clear",
-                    "getEventListeners", "debug", "undebug", "monitor", "unmonitor", "table", "$", "$$", "$x"];
+                    "getEventListeners", "debug", "undebug", "monitor", "unmonitor", "table", "$", "$$", "$x", "$0", "$1", "$2", "$3", "$4"];
                 for (var i = 0; i < commandLineAPI.length; ++i)
-                    propertyNames[commandLineAPI[i]] = true;
+                    if (!properties.has(commandLineAPI[i]))
+                        properties.set(commandLineAPI[i], {depth: Infinity, value: "", type:"native", name: commandLineAPI[i]});
             }
-            this._reportCompletions(completionsReadyCallback, dotNotation, bracketNotation, expressionString, prefix, Object.keys(propertyNames));
+            this._reportCompletions(completionsReadyCallback, dotNotation, bracketNotation, expressionString, prefix, properties);
         }
     },
 
@@ -764,7 +778,7 @@ WebInspector.ExecutionContext.prototype = {
      * @param {boolean} bracketNotation
      * @param {string} expressionString
      * @param {string} prefix
-     * @param {!Array.<string>} properties
+     * @param {!Map<string, number>} properties
      */
     _reportCompletions: function(completionsReadyCallback, dotNotation, bracketNotation, expressionString, prefix, properties) {
         if (bracketNotation) {
@@ -774,18 +788,21 @@ WebInspector.ExecutionContext.prototype = {
                 var quoteUsed = "\"";
         }
 
-        var results = [];
+        var caseSensitiveResults = [];
+        var caseInsensitiveResults = [];
+        var caseSensitiveAnywhere = [];
+        var caseInsensitiveAnywhere = [];
 
         if (!expressionString) {
-            const keywords = ["break", "case", "catch", "continue", "default", "delete", "do", "else", "finally", "for", "function", "if", "in",
-                              "instanceof", "new", "return", "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with"];
-            properties = properties.concat(keywords);
+            const keywords = ["break", "case", "catch", "class", "const", "constructor", "continue", "debugger", "default", "delete", "do", "else", "extends", "finally", "for", "function", "if", "in",
+                              "instanceof", "let", "new", "return", "super", "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with"];
+            keywords.forEach(word => properties.has(word) || properties.set(word, {depth: Infinity, value: "", type: "keyword", name: word}));
         }
+        var names = Array.from(properties.keys());
+        names.sort((a, b) => (properties.get(a).depth - properties.get(b).depth) || a.localeCompare(b));
 
-        properties.sort();
-
-        for (var i = 0; i < properties.length; ++i) {
-            var property = properties[i];
+        for (var i = 0; i < names.length; ++i) {
+            var property = names[i];
 
             // Assume that all non-ASCII characters are letters and thus can be used as part of identifier.
             if (dotNotation && !/^[a-zA-Z_$\u008F-\uFFFF][a-zA-Z0-9_$\u008F-\uFFFF]*$/.test(property))
@@ -799,13 +816,25 @@ WebInspector.ExecutionContext.prototype = {
 
             if (property.length < prefix.length)
                 continue;
-            if (prefix.length && !property.startsWith(prefix))
+            if (prefix.length && property.toLowerCase().indexOf(prefix.toLowerCase()) === -1)
                 continue;
 
             // Substitute actual newlines with newline characters. @see crbug.com/498421
-            results.push(property.split("\n").join("\\n"));
+            var prop = property.split("\n").join("\\n");
+
+            if (property.startsWith(prefix))
+                caseSensitiveResults.push(prop);
+            else if (property.toLowerCase().startsWith(prefix.toLowerCase()))
+                caseInsensitiveResults.push(prop);
+            else if (property.indexOf(prefix) !== -1)
+                caseSensitiveAnywhere.push(prop);
+            else
+                caseInsensitiveAnywhere.push(prop);
+
         }
-        completionsReadyCallback(results);
+        completionsReadyCallback(
+            caseSensitiveResults.concat(caseInsensitiveResults).concat(caseSensitiveAnywhere).concat(caseInsensitiveAnywhere)
+                .map(result => properties.get(result)));
     },
 
     /**

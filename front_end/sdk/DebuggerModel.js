@@ -1107,7 +1107,7 @@ WebInspector.DebuggerModel.CallFrame.prototype = {
     },
 
     /**
-     * @param {function(!Object)} callback
+     * @param {function(!Array<!Array>)} callback
      */
     variableNames: function(callback)
     {
@@ -1118,7 +1118,7 @@ WebInspector.DebuggerModel.CallFrame.prototype = {
             for (var i = 0; properties && i < properties.length; ++i)
                 result[properties[i].name] = true;
             if (--pendingRequests === 0)
-                callback(result);
+                callback(Object.keys(result).map(key => [key, Infinity]));
         }
 
         var scopeChain = this.scopeChain();

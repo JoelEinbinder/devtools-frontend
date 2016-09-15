@@ -20,6 +20,10 @@
     background-color: #eee;
 }
 
+.list-item .webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    margin-top: 15px;
+}
+
 .list-item > .title {
     word-wrap: break-word;
     white-space: normal;

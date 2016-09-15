@@ -257,7 +257,7 @@ WebInspector.TextEditorAutocompleteController.prototype = {
                 return;
             }
             if (!this._suggestBox)
-                this._suggestBox = new WebInspector.SuggestBox(this, 6);
+                this._suggestBox = new WebInspector.SuggestBox(this, 12, this._config.captureEnter);
 
             var oldPrefixRange = this._prefixRange;
             this._prefixRange = prefixRange;
@@ -278,6 +278,8 @@ WebInspector.TextEditorAutocompleteController.prototype = {
         if (!this._isCursorAtEndOfLine())
             return;
         var prefix = this._textEditor.text(this._prefixRange);
+        if (!hint.startsWith(prefix))
+            return;
         this._lastPrefix = prefix;
         this._hintElement.textContent = hint.substring(prefix.length).split("\n")[0];
         var cursor = this._codeMirror.getCursor("to");

@@ -114,12 +114,14 @@
 }
 
 .CodeMirror-matchingbracket {
-    border-bottom: 1px solid black;
-    color: #222 !important;
+    color: initial !important;
+    background-color: rgba(0, 0, 0, 0.13);
+
 }
 
 .CodeMirror-nonmatchingbracket {
     color: #222 !important;
+    background-color: rgba(255, 0, 0, 0.13);
 }
 
 .cm-whitespace::before {

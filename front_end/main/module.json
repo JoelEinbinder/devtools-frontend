@@ -305,6 +305,14 @@
             "defaultValue": true
         },
         {
+            "type": "setting",
+            "category": "Console",
+            "title": "Bracket matching",
+            "settingName": "consoleBracketMatching",
+            "settingType": "boolean",
+            "defaultValue": false
+        },
+        {
             "type": "@WebInspector.SettingUI",
             "category": "Extensions",
             "className": "WebInspector.HandlerRegistry.OpenAnchorLocationSettingUI"

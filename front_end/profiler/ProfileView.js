@@ -58,7 +58,7 @@ WebInspector.ProfileView = function(nodeFormatter, viewTypes)
     this.resetButton.setEnabled(false);
     this.resetButton.addEventListener("click", this._resetClicked, this);
 
-    this._linkifier = new WebInspector.Linkifier(new WebInspector.Linkifier.DefaultFormatter(30));
+    this._linkifier = new WebInspector.Linkifier(new WebInspector.Linkifier.DefaultFormatter());
 
     this._changeView();
     if (this._flameChart)

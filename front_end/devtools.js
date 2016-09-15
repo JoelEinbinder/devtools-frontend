@@ -894,7 +894,7 @@ function installObjectObserve()
 {
     var properties = [
         "advancedSearchConfig", "auditsPanelSplitViewState", "auditsSidebarWidth", "blockedURLs", "breakpoints", "cacheDisabled", "colorFormat", "consoleHistory",
-        "consoleTimestampsEnabled", "cpuProfilerView", "cssSourceMapsEnabled", "currentDockState", "customColorPalette", "customDevicePresets", "customEmulatedDeviceList",
+        "consoleTimestampsEnabled", "consoleBracketMatching", "cpuProfilerView", "cssSourceMapsEnabled", "currentDockState", "customColorPalette", "customDevicePresets", "customEmulatedDeviceList",
         "customFormatters", "customUserAgent", "databaseTableViewVisibleColumns", "dataGrid-cookiesTable", "dataGrid-DOMStorageItemsView", "debuggerSidebarHidden", "disableDataSaverInfobar",
         "disablePausedStateOverlay", "domBreakpoints", "domWordWrap", "elementsPanelSplitViewState", "elementsSidebarWidth", "emulation.deviceHeight", "emulation.deviceModeValue",
         "emulation.deviceOrientationOverride", "emulation.deviceScale", "emulation.deviceScaleFactor", "emulation.deviceUA", "emulation.deviceWidth", "emulation.geolocationOverride",

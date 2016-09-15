@@ -51,7 +51,7 @@ WebInspector.LinkifierFormatter.prototype = {
  */
 WebInspector.Linkifier = function(formatter)
 {
-    this._formatter = formatter || new WebInspector.Linkifier.DefaultFormatter(WebInspector.Linkifier.MaxLengthForDisplayedURLs);
+    this._formatter = formatter || new WebInspector.Linkifier.DefaultFormatter();
     /** @type {!Map<!WebInspector.Target, !Array<!Element>>} */
     this._anchorsByTarget = new Map();
     /** @type {!Map<!WebInspector.Target, !WebInspector.LiveLocationPool>} */
@@ -90,9 +90,9 @@ WebInspector.Linkifier.handleLink = function(url, lineNumber)
  */
 WebInspector.Linkifier.linkifyUsingRevealer = function(revealable, text, fallbackHref, fallbackLineNumber, title, classes)
 {
-    var a = createElement("a");
+    var a = WebInspector.MiddleTruncatingLink.create();
     a.className = (classes || "") + " webkit-html-resource-link";
-    a.textContent = text.trimMiddle(WebInspector.Linkifier.MaxLengthForDisplayedURLs);
+    a.text = text;
     a.title = title || text;
     if (fallbackHref) {
         a.href = fallbackHref;
@@ -287,7 +287,7 @@ WebInspector.Linkifier.prototype = {
      */
     _createAnchor: function(classes)
     {
-        var anchor = createElement("a");
+        var anchor = WebInspector.MiddleTruncatingLink.create();
         anchor.className = (classes || "") + " webkit-html-resource-link";
 
         /**
@@ -350,12 +350,8 @@ WebInspector.Linkifier.uiLocationByAnchor = function(anchor)
 /**
  * @constructor
  * @implements {WebInspector.LinkifierFormatter}
- * @param {number=} maxLength
  */
-WebInspector.Linkifier.DefaultFormatter = function(maxLength)
-{
-    this._maxLength = maxLength;
-}
+WebInspector.Linkifier.DefaultFormatter = function() {}
 
 WebInspector.Linkifier.DefaultFormatter.prototype = {
     /**
@@ -367,10 +363,7 @@ WebInspector.Linkifier.DefaultFormatter.prototype = {
     formatLiveAnchor: function(anchor, uiLocation, isBlackboxed)
     {
         var text = uiLocation.linkText();
-        text = text.replace(/([a-f0-9]{7})[a-f0-9]{13}[a-f0-9]*/g, "$1\u2026");
-        if (this._maxLength)
-            text = text.trimMiddle(this._maxLength);
-        anchor.textContent = text;
+        anchor.text = text.replace(/([a-f0-9]{7})[a-f0-9]{13}[a-f0-9]*/g, "$1\u2026");
 
         var titleText = uiLocation.uiSourceCode.url();
         if (typeof uiLocation.lineNumber === "number")
@@ -387,10 +380,8 @@ WebInspector.Linkifier.DefaultFormatter.prototype = {
  */
 WebInspector.Linkifier.DefaultCSSFormatter = function()
 {
-    WebInspector.Linkifier.DefaultFormatter.call(this, WebInspector.Linkifier.DefaultCSSFormatter.MaxLengthForDisplayedURLs);
+    WebInspector.Linkifier.DefaultFormatter.call(this);
 }
-
-WebInspector.Linkifier.DefaultCSSFormatter.MaxLengthForDisplayedURLs = 30;
 
 WebInspector.Linkifier.DefaultCSSFormatter.prototype = {
     /**
@@ -410,11 +401,11 @@ WebInspector.Linkifier.DefaultCSSFormatter.prototype = {
 }
 
 /**
- * The maximum number of characters to display in a URL.
+ * The minimum number of characters to display in a long URL.
  * @const
  * @type {number}
  */
-WebInspector.Linkifier.MaxLengthForDisplayedURLs = 150;
+WebInspector.Linkifier.MinCharLengthForDisplayedURLs = 15;
 
 /**
  * The maximum length before strings are considered too long for finding URLs.
