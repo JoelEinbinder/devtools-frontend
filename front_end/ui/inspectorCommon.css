@@ -292,3 +292,10 @@ body.inactive select.chrome-select,
 label[is=dt-icon-label] {
     flex: none;
 }
+
+a[is=dt-inner-truncating-link] {
+    max-width: 100%;
+    position: relative;
+    vertical-align: bottom;
+    display: inline-flex;
+}

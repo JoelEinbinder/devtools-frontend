@@ -138,7 +138,7 @@ WebInspector.TextPrompt.prototype = {
         this._element.ownerDocument.defaultView.addEventListener("resize", this._boundClearAutocomplete, false);
 
         if (this._suggestBoxEnabled)
-            this._suggestBox = new WebInspector.SuggestBox(this);
+            this._suggestBox = new WebInspector.SuggestBox(this, 12);
 
         if (this._title)
             this._proxyElement.title = this._title;
@@ -512,8 +512,8 @@ WebInspector.TextPrompt.prototype = {
 
         // Filter out dupes.
         var store = new Set();
-        completions = completions.filter(item => !store.has(item) && !!store.add(item));
-        var annotatedCompletions = completions.map(item => ({title: item}));
+        completions = completions.filter(item => !store.has(item.name) && !!store.add(item.name));
+        var annotatedCompletions = completions.map(item => ({title: item.name, value: item.value, type: item.type, constructor: item.constructor}));
 
         if (prefix || force) {
             if (prefix)
@@ -553,24 +553,26 @@ WebInspector.TextPrompt.prototype = {
         if (this.isCaretAtEndOfPrompt()) {
             var completionText = annotatedCompletions[selectedIndex].title;
             var prefixText = this._userEnteredRange.toString();
-            var suffixText = completionText.substring(wordPrefixLength);
-            this._userEnteredRange.deleteContents();
-            this._element.normalize();
-            var finalSelectionRange = this._createRange();
+            if (completionText.toLowerCase().startsWith(prefixText.toLowerCase())) {
+                var suffixText = completionText.substring(wordPrefixLength);
+                this._userEnteredRange.deleteContents();
+                this._element.normalize();
+                var finalSelectionRange = this._createRange();
 
-            var prefixTextNode = createTextNode(prefixText);
-            fullWordRange.insertNode(prefixTextNode);
+                var prefixTextNode = createTextNode(prefixText);
+                fullWordRange.insertNode(prefixTextNode);
 
-            this.autoCompleteElement = createElementWithClass("span", "auto-complete-text");
-            this.autoCompleteElement.textContent = suffixText;
+                this.autoCompleteElement = createElementWithClass("span", "auto-complete-text");
+                this.autoCompleteElement.textContent = suffixText;
 
-            prefixTextNode.parentNode.insertBefore(this.autoCompleteElement, prefixTextNode.nextSibling);
+                prefixTextNode.parentNode.insertBefore(this.autoCompleteElement, prefixTextNode.nextSibling);
 
-            finalSelectionRange.setStart(prefixTextNode, wordPrefixLength);
-            finalSelectionRange.setEnd(prefixTextNode, wordPrefixLength);
-            selection.removeAllRanges();
-            selection.addRange(finalSelectionRange);
-            this.dispatchEventToListeners(WebInspector.TextPrompt.Events.ItemApplied);
+                finalSelectionRange.setStart(prefixTextNode, wordPrefixLength);
+                finalSelectionRange.setEnd(prefixTextNode, wordPrefixLength);
+                selection.removeAllRanges();
+                selection.addRange(finalSelectionRange);
+                this.dispatchEventToListeners(WebInspector.TextPrompt.Events.ItemApplied);
+            }
         }
     },
 

@@ -118,8 +118,10 @@
 
 .webkit-html-resource-link {
     /* Required for consistency with view-source.css, since anchors may not have href attributes */
-    text-decoration: underline;
     cursor: pointer;
+    white-space: nowrap;
+    align-items: flex-start;
+    text-decoration: none;
 }
 
 .webkit-html-external-link {
@@ -127,9 +129,13 @@
     text-decoration: none;
 }
 
-.webkit-html-external-link:hover {
-    /* Keep this in sync with view-source.css (.webkit-html-external-link:hover) */
-    text-decoration: underline;
+.webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    /* Keep this in sync with truncatingText.css (:host(:hover)::before) */
+    content: "\00a0";
+    border-top: 1px solid;
+    position: absolute;
+    width: 100%;
+    margin-top: 11px;
 }
 
 .webkit-html-end-of-file {

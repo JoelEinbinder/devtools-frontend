@@ -52,8 +52,9 @@ WebInspector.SuggestBoxDelegate.prototype = {
  * @constructor
  * @param {!WebInspector.SuggestBoxDelegate} suggestBoxDelegate
  * @param {number=} maxItemsHeight
+ * @param {boolean=} captureEnter
  */
-WebInspector.SuggestBox = function(suggestBoxDelegate, maxItemsHeight)
+WebInspector.SuggestBox = function(suggestBoxDelegate, maxItemsHeight, captureEnter)
 {
     this._suggestBoxDelegate = suggestBoxDelegate;
     this._length = 0;
@@ -69,6 +70,8 @@ WebInspector.SuggestBox = function(suggestBoxDelegate, maxItemsHeight)
     this._asyncDetailsCallback = null;
     /** @type {!Map<number, !Promise<{detail: string, description: string}>>} */
     this._asyncDetailsPromises = new Map();
+    this._userInteracted = false;
+    this._captureEnter = captureEnter;
 }
 
 /**
@@ -161,6 +164,7 @@ WebInspector.SuggestBox.prototype = {
         if (!this.visible())
             return;
 
+        this._userInteracted = false;
         this._bodyElement.removeEventListener("mousedown", this._maybeHideBound, true);
         delete this._bodyElement;
         this._container.remove();
@@ -222,6 +226,8 @@ WebInspector.SuggestBox.prototype = {
         if (!this._length)
             return false;
 
+        this._userInteracted = true;
+
         if (this._selectedIndex === -1 && shift < 0)
             shift += 1;
 
@@ -253,22 +259,58 @@ WebInspector.SuggestBox.prototype = {
      * @param {string|undefined} className
      * @param {number} index
      */
-    _createItemElement: function(prefix, text, className, index)
+    _createItemElement: function(prefix, text, item, className, index)
     {
         var element = createElementWithClass("div", "suggest-box-content-item source-code " + (className || ""));
         element.tabIndex = -1;
-        if (prefix && prefix.length && !text.indexOf(prefix)) {
-            element.createChild("span", "prefix").textContent = prefix;
-            element.createChild("span", "suffix").textContent = text.substring(prefix.length).trimEnd(50);
-        } else {
-            element.createChild("span", "suffix").textContent = text.trimEnd(50);
+        var texts = text.trimEnd(50 + prefix.length).toLowerCase().split(prefix.toLowerCase());
+        var index = 0;
+        for (var i = 0; i < texts.length; i++){
+            if (texts[i].length)
+                element.createChild("span", "suffix").textContent = text.substring(index,index+texts[i].length);
+            index += texts[i].length;
+
+            if (prefix.length && i < texts.length-1)
+                element.createChild("span", "prefix").textContent = text.substring(index,index+prefix.length);
+            index += prefix.length;
+
         }
         element.__fullValue = text;
+        var valueElement = element.createChild("span", "value");
+        this._buildValueElement(valueElement, item);
         element.createChild("span", "spacer");
         element.addEventListener("mousedown", this._onItemMouseDown.bind(this), false);
         return element;
     },
 
+    _buildValueElement: function(element, item)
+    {
+        switch (item.type) {
+            case "number":
+            case "boolean":
+            case "undefined":
+                element.textContent = item.value;
+                break;
+            case "string":
+                element.textContent = "\""+ item.value + "\"";
+                break;
+            case "function":
+                var match = item.value.match(/\(([^)]*)\)/);
+                if (item.value.startsWith("function") && match && match.length > 1)
+                    element.textContent = "fn(" + match[1].split(",").map(str => str.trim()).join(", ") + ")";
+                else
+                    element.textContent = "fn()";
+                break;
+            case "object":
+                if (item.value === "null" || !item.constructor) {
+                    element.textContent = item.value;
+                    break;
+                }
+                element.textContent = item.constructor;
+
+                break;
+        }
+    },
     /**
      * @param {!WebInspector.SuggestBox.Suggestions} items
      * @param {string} userEnteredText
@@ -284,7 +326,7 @@ WebInspector.SuggestBox.prototype = {
 
         for (var i = 0; i < items.length; ++i) {
             var item = items[i];
-            var currentItemElement = this._createItemElement(userEnteredText, item.title, item.className, i);
+            var currentItemElement = this._createItemElement(userEnteredText, item.title, item, item.className, i);
             this._element.appendChild(currentItemElement);
         }
     },
@@ -358,7 +400,7 @@ WebInspector.SuggestBox.prototype = {
         if (!completions || !completions.length)
             return false;
 
-        if (completions.length > 1)
+        if (completions.length > 1 || !completions[0].title.startsWith(userEnteredText))
             return true;
 
         // Do not show a single suggestion if it is the same as user-entered prefix, even if allowed to show single-item suggest boxes.
@@ -459,6 +501,9 @@ WebInspector.SuggestBox.prototype = {
      */
     enterKeyPressed: function()
     {
+        if (!this._userInteracted && this._captureEnter)
+            return false;
+
         var hasSelectedItem = !!this._selectedElement || this._onlyCompletion;
         this.acceptSuggestion();
 

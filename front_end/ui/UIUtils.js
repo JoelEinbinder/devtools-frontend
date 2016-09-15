@@ -1986,7 +1986,8 @@ WebInspector.linkifyURLAsNode = function(url, linkText, classes, isExternal, too
     if (!linkText)
         linkText = url;
 
-    var a = createElementWithClass("a", classes);
+    var a = WebInspector.MiddleTruncatingLink.create();
+    a.className = classes || "";
     var href = url;
     if (url.trim().toLowerCase().startsWith("javascript:"))
         href = null;
@@ -2000,7 +2001,7 @@ WebInspector.linkifyURLAsNode = function(url, linkText, classes, isExternal, too
         a.title = url;
     else if (tooltipText)
         a.title = tooltipText;
-    a.textContent = linkText.trimMiddle(150);
+    a.text = linkText;
     if (isExternal)
         a.setAttribute("target", "_blank");
 

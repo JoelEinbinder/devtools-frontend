@@ -65,6 +65,10 @@
     line-height: 20px;
 }
 
+.report-field .webkit-html-resource-link [is=dt-inner-truncating-text]::before {
+    margin-top: 15px;
+}
+
 .report-row {
     margin: 10px 0 2px 18px;
 }

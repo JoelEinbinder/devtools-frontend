@@ -30,6 +30,7 @@
         "TextEditor.js",
         "KeyboardShortcut.js",
         "ListWidget.js",
+        "MiddleTruncatingText.js",
         "Panel.js",
         "Popover.js",
         "ProgressIndicator.js",
@@ -91,6 +92,7 @@
         "textButton.css",
         "textPrompt.css",
         "tooltip.css",
-        "treeoutline.css"
+        "treeoutline.css",
+        "truncatingText.css"
     ]
 }
