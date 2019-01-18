@@ -705,7 +705,7 @@ UI.measuredScrollbarWidth = function(document) {
  * @return {!DocumentFragment}
  */
 UI.createShadowRootWithCoreStyles = function(element, cssFile) {
-  const shadowRoot = element.createShadowRoot();
+  const shadowRoot = element.attachShadow({mode: 'open'});
   UI._injectCoreStyles(shadowRoot);
   if (cssFile)
     UI.appendStyle(shadowRoot, cssFile);
@@ -1172,13 +1172,21 @@ UI.beautifyFunctionName = function(name) {
 /**
  * @param {string} localName
  * @param {string} typeExtension
- * @param {!Object} prototype
+ * @param {!Function} definition
  * @return {function()}
  * @suppressGlobalPropertiesCheck
  * @template T
  */
-UI.registerCustomElement = function(localName, typeExtension, prototype) {
-  return document.registerElement(typeExtension, {prototype: Object.create(prototype), extends: localName});
+UI.registerCustomElement = function(localName, typeExtension, definition) {
+  self.customElements.define(typeExtension, class extends definition {
+    constructor() {
+      super();
+      this.setAttribute('is', typeExtension);
+    }
+  }, {
+    extends: localName
+  });
+  return () => document.createElement(localName, {is: typeExtension})
 };
 
 /**
@@ -1221,10 +1229,10 @@ UI.createInput = function(className, type) {
  * @return {!Element}
  */
 UI.createRadioLabel = function(name, title, checked) {
-  const element = createElement('label', 'dt-radio');
+  const element = createElement('span', 'dt-radio');
   element.radioElement.name = name;
   element.radioElement.checked = !!checked;
-  element.createTextChild(title);
+  element.labelElement.createTextChild(title);
   return element;
 };
 
@@ -1234,7 +1242,7 @@ UI.createRadioLabel = function(name, title, checked) {
  * @return {!Element}
  */
 UI.createLabel = function(title, iconClass) {
-  const element = createElement('label', 'dt-icon-label');
+  const element = createElement('span', 'dt-icon-label');
   element.createChild('span').textContent = title;
   element.type = iconClass;
   return element;
@@ -1246,8 +1254,8 @@ UI.createLabel = function(title, iconClass) {
  * @param {number} max
  * @param {number} tabIndex
  */
-UI.createSliderLabel = function(min, max, tabIndex) {
-  const element = createElement('label', 'dt-slider');
+UI.createSlider = function(min, max, tabIndex) {
+  const element = createElement('span', 'dt-slider');
   element.sliderElement.min = min;
   element.sliderElement.max = max;
   element.sliderElement.step = 1;
@@ -1281,7 +1289,7 @@ UI.appendStyle = function(node, cssFile) {
 /**
  * @extends {HTMLLabelElement}
  */
-UI.CheckboxLabel = class extends HTMLLabelElement {
+UI.CheckboxLabel = class extends HTMLSpanElement {
   constructor() {
     super();
     /** @type {!DocumentFragment} */
@@ -1289,15 +1297,7 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
     /** @type {!HTMLInputElement} */
     this.checkboxElement;
     /** @type {!Element} */
-    this.textElement;
-    throw new Error('Checkbox must be created via factory method.');
-  }
-
-  /**
-   * @override
-   */
-  createdCallback() {
-    UI.CheckboxLabel._lastId = (UI.CheckboxLabel._lastId || 0) + 1;
+    this.textElement;    UI.CheckboxLabel._lastId = (UI.CheckboxLabel._lastId || 0) + 1;
     const id = 'ui-checkbox-label' + UI.CheckboxLabel._lastId;
     this._shadowRoot = UI.createShadowRootWithCoreStyles(this, 'ui/checkboxTextLabel.css');
     this.checkboxElement = /** @type {!HTMLInputElement} */ (this._shadowRoot.createChild('input'));
@@ -1305,7 +1305,7 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
     this.checkboxElement.setAttribute('id', id);
     this.textElement = this._shadowRoot.createChild('label', 'dt-checkbox-text');
     this.textElement.setAttribute('for', id);
-    this._shadowRoot.createChild('content');
+    this._shadowRoot.createChild('slot');
   }
 
   /**
@@ -1316,8 +1316,8 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
    */
   static create(title, checked, subtitle) {
     if (!UI.CheckboxLabel._constructor)
-      UI.CheckboxLabel._constructor = UI.registerCustomElement('label', 'dt-checkbox', UI.CheckboxLabel.prototype);
-    const element = /** @type {!UI.CheckboxLabel} */ (new UI.CheckboxLabel._constructor());
+      UI.CheckboxLabel._constructor = UI.registerCustomElement('span', 'dt-checkbox', UI.CheckboxLabel);
+    const element = /** @type {!UI.CheckboxLabel} */ (UI.CheckboxLabel._constructor());
     element.checkboxElement.checked = !!checked;
     if (title !== undefined) {
       element.textElement.textContent = title;
@@ -1358,20 +1358,21 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
 };
 
 (function() {
-  UI.registerCustomElement('label', 'dt-radio', {
-    /**
-     * @this {Element}
-     */
-    createdCallback: function() {
+  let labelId = 0;
+  UI.registerCustomElement('span', 'dt-radio', class extends HTMLSpanElement {
+    constructor() {
+      super();
       this.radioElement = this.createChild('input', 'dt-radio-button');
-      this.radioElement.type = 'radio';
-      const root = UI.createShadowRootWithCoreStyles(this, 'ui/radioButton.css');
-      root.createChild('content').select = '.dt-radio-button';
-      root.createChild('content');
-      this.addEventListener('click', radioClickHandler, false);
-    },
+      this.labelElement = this.createChild('label');
 
-    __proto__: HTMLLabelElement.prototype
+      const id = ++labelId;
+      this.radioElement.id = id;
+      this.radioElement.type = 'radio';
+      this.labelElement.htmlFor = id;
+      const root = UI.createShadowRootWithCoreStyles(this, 'ui/radioButton.css');
+      root.createChild('slot');
+      this.addEventListener('click', radioClickHandler, false);
+    }
   });
 
   /**
@@ -1386,17 +1387,15 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
     this.radioElement.dispatchEvent(new Event('change'));
   }
 
-  UI.registerCustomElement('label', 'dt-icon-label', {
-    /**
-     * @this {Element}
-     */
-    createdCallback: function() {
+  UI.registerCustomElement('span', 'dt-icon-label', class extends HTMLSpanElement {
+    constructor() {
+      super();
       const root = UI.createShadowRootWithCoreStyles(this);
       this._iconElement = UI.Icon.create();
       this._iconElement.style.setProperty('margin-right', '4px');
       root.appendChild(this._iconElement);
-      root.createChild('content');
-    },
+      root.createChild('slot');
+    }
 
     /**
      * @param {string} type
@@ -1404,21 +1403,17 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
      */
     set type(type) {
       this._iconElement.setIconType(type);
-    },
-
-    __proto__: HTMLLabelElement.prototype
+    }
   });
 
-  UI.registerCustomElement('label', 'dt-slider', {
-    /**
-     * @this {Element}
-     */
-    createdCallback: function() {
+  UI.registerCustomElement('span', 'dt-slider', class extends HTMLSpanElement {
+    constructor() {
+      super();
       const root = UI.createShadowRootWithCoreStyles(this, 'ui/slider.css');
       this.sliderElement = createElementWithClass('input', 'dt-range-input');
       this.sliderElement.type = 'range';
       root.appendChild(this.sliderElement);
-    },
+    }
 
     /**
      * @param {number} amount
@@ -1426,28 +1421,24 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
      */
     set value(amount) {
       this.sliderElement.value = amount;
-    },
+    }
 
     /**
      * @this {Element}
      */
     get value() {
       return this.sliderElement.value;
-    },
-
-    __proto__: HTMLLabelElement.prototype
+    }
   });
 
-  UI.registerCustomElement('label', 'dt-small-bubble', {
-    /**
-     * @this {Element}
-     */
-    createdCallback: function() {
+  UI.registerCustomElement('span', 'dt-small-bubble', class extends HTMLSpanElement {
+    constructor() {
+      super();
       const root = UI.createShadowRootWithCoreStyles(this, 'ui/smallBubble.css');
       this._textElement = root.createChild('div');
       this._textElement.className = 'info';
-      this._textElement.createChild('content');
-    },
+      this._textElement.createChild('slot');
+    }
 
     /**
      * @param {string} type
@@ -1455,16 +1446,12 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
      */
     set type(type) {
       this._textElement.className = type;
-    },
-
-    __proto__: HTMLLabelElement.prototype
+    }
   });
 
-  UI.registerCustomElement('div', 'dt-close-button', {
-    /**
-     * @this {Element}
-     */
-    createdCallback: function() {
+  UI.registerCustomElement('div', 'dt-close-button', class extends HTMLDivElement {
+    constructor() {
+      super();
       const root = UI.createShadowRootWithCoreStyles(this, 'ui/closeButton.css');
       this._buttonElement = root.createChild('div', 'close-button');
       const regularIcon = UI.Icon.create('smallicon-cross', 'default-icon');
@@ -1473,7 +1460,7 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
       this._buttonElement.appendChild(regularIcon);
       this._buttonElement.appendChild(this._hoverIcon);
       this._buttonElement.appendChild(this._activeIcon);
-    },
+    }
 
     /**
      * @param {boolean} gray
@@ -1487,9 +1474,7 @@ UI.CheckboxLabel = class extends HTMLLabelElement {
         this._hoverIcon.setIconType('mediumicon-red-cross-hover');
         this._activeIcon.setIconType('mediumicon-red-cross-active');
       }
-    },
-
-    __proto__: HTMLDivElement.prototype
+    }
   });
 })();
 

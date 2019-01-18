@@ -90,6 +90,7 @@ body {
     tab-size: 4;
     -webkit-user-select: none;
     color: #222;
+    box-shadow: 1px 1px 0px 8px #000;
 }
 
 .platform-linux {
